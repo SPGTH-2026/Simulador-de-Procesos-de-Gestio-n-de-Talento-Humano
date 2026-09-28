@@ -2,31 +2,50 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
+use App\Enums\Role;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    // role, subrole y active NO son asignables en masa: nadie se sube de rol desde un request.
+    protected $fillable = ['name', 'email', 'password'];
+
+    protected $hidden = ['password', 'remember_token'];
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => Role::class,
+            'active' => 'boolean',
         ];
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
+    /** @return string[] */
+    public function permissions(): array
+    {
+        $cfg = config('permissions');
+
+        return match ($this->role) {
+            Role::Instructor => array_values(array_filter(
+                $cfg['all'],
+                fn ($p) => ! str_starts_with($p, 'propio:') && $p !== 'convocatorias:postular'
+            )),
+            Role::Aspirante => $cfg['aspirante'],
+            Role::Aprendiz => $cfg['aprendiz'][$this->subrole] ?? $cfg['aprendiz']['general'],
+            default => [],
+        };
     }
 }
