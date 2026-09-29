@@ -13,7 +13,7 @@ use Laravel\Socialite\Facades\Socialite;
 
 class SocialAuthController extends Controller
 {
-    private const PROVIDERS = ['google', 'github'];
+    private const PROVIDERS = ['google'];
 
     public function redirect(string $provider)
     {

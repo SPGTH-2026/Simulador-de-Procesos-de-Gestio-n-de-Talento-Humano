@@ -44,7 +44,7 @@ class User extends Authenticatable
                 fn ($p) => ! str_starts_with($p, 'propio:') && $p !== 'convocatorias:postular'
             )),
             Role::Aspirante => $cfg['aspirante'],
-            Role::Aprendiz => $cfg['aprendiz'][$this->subrole] ?? $cfg['aprendiz']['general'],
+            Role::Aprendiz => $cfg['aprendiz'][$this->subrole] ?? [],
             default => [],
         };
     }
