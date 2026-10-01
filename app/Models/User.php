@@ -2,31 +2,51 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
+use App\Enums\Role;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
+// El trait MustVerifyEmail lo hereda de Authenticatable: aquí solo se declara el
+// contrato. Sin implements, el middleware 'verified' deja pasar a cualquiera.
+class User extends Authenticatable implements MustVerifyEmail
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    // role, subrole y active NO son asignables en masa: nadie se sube de rol desde un request.
+    protected $fillable = ['name', 'email', 'password'];
+
+    protected $hidden = ['password', 'remember_token'];
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => Role::class,
+            'active' => 'boolean',
         ];
+    }
+
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
+    /** @return string[] */
+    public function permissions(): array
+    {
+        $cfg = config('permissions');
+
+        return match ($this->role) {
+            Role::SuperAdmin => $cfg['all'],
+            Role::Instructor => array_values(array_diff($cfg['all'], $cfg['super_admin_only'])),
+            Role::Aspirante => $cfg['aspirante'],
+            Role::Aprendiz => $cfg['aprendiz'][$this->subrole] ?? [],
+            default => [],
+        };
     }
 }
