@@ -12,6 +12,12 @@ return [
         'propio:postulaciones', 'propio:documentos', 'propio:evaluaciones', 'propio:notificaciones',
     ],
 
+    // Permisos EXCLUSIVOS del super admin. El instructor tiene todo lo demás
+    // (incluido propio:* y convocatorias:postular): es el administrador del flujo académico.
+    'super_admin_only' => [
+        'usuarios:gestionar', 'supervision:gestionar',
+    ],
+
     'aspirante' => [
         'dashboard:ver', 'convocatorias:ver', 'convocatorias:postular',
         'propio:postulaciones', 'propio:documentos', 'propio:evaluaciones', 'propio:notificaciones',
@@ -29,5 +35,6 @@ return [
         'revisor_documental' => ['dashboard:ver', 'documentos:ver', 'documentos:cargar', 'documentos:validar', 'reportes:ver'],
         'gestor_convocatorias' => ['dashboard:ver', 'convocatorias:ver', 'convocatorias:gestionar', 'reportes:ver'],
     ],
-    // El instructor recibe 'all' menos lo propio del aspirante (ver User::permissions()).
+    // El super admin recibe 'all'; el instructor recibe 'all' menos lo exclusivo
+    // (ver User::permissions()).
 ];

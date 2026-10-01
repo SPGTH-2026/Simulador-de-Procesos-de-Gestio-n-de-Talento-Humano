@@ -39,10 +39,8 @@ class User extends Authenticatable
         $cfg = config('permissions');
 
         return match ($this->role) {
-            Role::Instructor => array_values(array_filter(
-                $cfg['all'],
-                fn ($p) => ! str_starts_with($p, 'propio:') && $p !== 'convocatorias:postular'
-            )),
+            Role::SuperAdmin => $cfg['all'],
+            Role::Instructor => array_values(array_diff($cfg['all'], $cfg['super_admin_only'])),
             Role::Aspirante => $cfg['aspirante'],
             Role::Aprendiz => $cfg['aprendiz'][$this->subrole] ?? [],
             default => [],
