@@ -12,9 +12,7 @@ use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
-    public function register(): void
-    {
-    }
+    public function register(): void {}
 
     public function boot(): void
     {
@@ -41,5 +39,14 @@ class AppServiceProvider extends ServiceProvider
 
         // 3) Anti fuerza bruta
         RateLimiter::for('login', fn (Request $r) => Limit::perMinute(5)->by($r->ip().'|'.strtolower((string) $r->input('email'))));
+
+        // 4) OTP: un código de 6 dígitos son 1 millón de combinaciones, así que se limita
+        //    el envío (para no inundar el correo) y la comprobación (para no adivinar).
+        RateLimiter::for('otp-send', fn (Request $r) => [
+            Limit::perMinute(3)->by($r->ip().'|'.strtolower((string) $r->input('email'))),
+            Limit::perHour(10)->by($r->ip().'|'.strtolower((string) $r->input('email'))),
+        ]);
+
+        RateLimiter::for('otp-check', fn (Request $r) => Limit::perMinute(5)->by($r->ip()));
     }
 }

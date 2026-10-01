@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -30,7 +33,11 @@ class AuthController extends Controller
             'active' => true,
         ]);
 
-        return response()->json($this->issue($user), 201);
+        // Sesión (cookie HttpOnly) en lugar de token Bearer, igual que login().
+        Auth::guard('web')->login($user);
+        $request->session()->regenerate();
+
+        return response()->json($this->body($user, null, null), 201);
     }
 
     public function login(Request $request): JsonResponse
@@ -49,7 +56,11 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => 'Tu usuario está desactivado. Contacta al instructor']);
         }
 
-        return response()->json($this->issue($user));
+        // Sesión (cookie HttpOnly) en lugar de token Bearer.
+        Auth::guard('web')->login($user);
+        $request->session()->regenerate();
+
+        return response()->json($this->body($user, null, null));
     }
 
     /** También sirve de "latido": el front lo llama cuando hay actividad. */
@@ -57,14 +68,97 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        return response()->json($this->body($user, null, $user->currentAccessToken()->expires_at));
+        return response()->json($this->body($user, null, null));
     }
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json(['message' => 'Sesión cerrada']);
+    }
+
+    /**
+     * Paso 1 de recuperar contraseña: envía el código.
+     * La respuesta es idéntica exista o no el correo: no revelamos qué correos están
+     * registrados (si no, cualquiera podría averiguar las cuentas de la app).
+     */
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate(['email' => ['required', 'email']]);
+
+        $user = User::where('email', $data['email'])->first();
+
+        if ($user) {
+            app(OtpService::class)->send($user->email, OtpService::RESET_PASSWORD);
+        }
+
+        return response()->json([
+            'message' => 'Si el correo está registrado, te enviamos un código de verificación.',
+        ]);
+    }
+
+    /** Paso 2: valida el código y cambia la contraseña. */
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+            'code' => ['required', 'string', 'size:6'],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+        ]);
+
+        $user = User::where('email', $data['email'])->first();
+
+        if (! $user || ! app(OtpService::class)->verify($user->email, OtpService::RESET_PASSWORD, $data['code'])) {
+            throw ValidationException::withMessages(['code' => 'El código no es válido o expiró']);
+        }
+
+        // El cast 'password' => 'hashed' hace el hash solo; no usar Hash::make.
+        $user->forceFill(['password' => $data['password']])->save();
+
+        // Cerrar cualquier sesión o token abierto: si alguien entró con la contraseña
+        // vieja, recuperar la cuenta no sirve si conserva el acceso.
+        DB::table('sessions')->where('user_id', $user->id)->delete();
+        $user->tokens()->delete();
+
+        return response()->json(['message' => 'Tu contraseña fue actualizada']);
+    }
+
+    /** Reenvía el código de confirmación de correo. */
+    public function sendVerification(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['message' => 'Tu correo ya está confirmado']);
+        }
+
+        app(OtpService::class)->send($user->email, OtpService::VERIFY_EMAIL);
+
+        return response()->json(['message' => 'Te enviamos un código a tu correo']);
+    }
+
+    /** Confirma el correo con el código recibido. */
+    public function confirmVerification(Request $request): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'size:6']]);
+
+        $user = $request->user();
+
+        if ($user->hasVerifiedEmail()) {
+            return response()->json(['ok' => true]);
+        }
+
+        if (! app(OtpService::class)->verify($user->email, OtpService::VERIFY_EMAIL, $data['code'])) {
+            throw ValidationException::withMessages(['code' => 'El código no es válido o expiró']);
+        }
+
+        $user->markEmailAsVerified();
+
+        return response()->json(['ok' => true]);
     }
 
     public static function issueToken(User $user): array
@@ -84,17 +178,24 @@ class AuthController extends Controller
 
     private function body(User $user, ?string $token, $expiresAt): array
     {
-        return [
-            'token' => $token,
-            'expires_at' => $expiresAt?->toIso8601String(),
+        $response = [
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role->value,
                 'subrole' => $user->subrole,
+                'email_verified' => (bool) $user->email_verified_at,
                 'permissions' => $user->permissions(),
             ],
         ];
+
+        // Con sesión no hay token: solo se incluye si se emite uno (flujo social heredado).
+        if ($token !== null) {
+            $response['token'] = $token;
+            $response['expires_at'] = $expiresAt?->toIso8601String();
+        }
+
+        return $response;
     }
 }

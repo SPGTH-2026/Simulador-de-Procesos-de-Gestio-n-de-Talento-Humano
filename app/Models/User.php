@@ -3,13 +3,16 @@
 namespace App\Models;
 
 use App\Enums\Role;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+// El trait MustVerifyEmail lo hereda de Authenticatable: aquí solo se declara el
+// contrato. Sin implements, el middleware 'verified' deja pasar a cualquiera.
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable;
 
