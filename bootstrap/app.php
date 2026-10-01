@@ -20,6 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'verified' => EnsureEmailIsVerified::class,
         ]);
+
+        // Backend solo-API: si un invitado (p. ej. sesión expirada) llama a /api,
+        // debe recibir 401 JSON. Sin esto, Laravel intenta redirigir a la ruta web
+        // 'login' (que no existe) y responde 500. Los navegadores van al login del front.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*')
+            ? null
+            : rtrim((string) config('app.frontend_url'), '/').'/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
