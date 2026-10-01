@@ -33,10 +33,9 @@ class AuthController extends Controller
             'active' => true,
         ]);
 
-        // Sesión (cookie HttpOnly) en lugar de token Bearer, igual que login().
-        Auth::guard('web')->login($user);
-        $request->session()->regenerate();
-
+        // No se abre sesión aquí: el flujo es registrarse, ir a la pantalla de
+        // inicio de sesión y entrar con correo y contraseña. La verificación
+        // por OTP ocurre después del login.
         return response()->json($this->body($user, null, null), 201);
     }
 
@@ -136,7 +135,11 @@ class AuthController extends Controller
             return response()->json(['message' => 'Tu correo ya está confirmado']);
         }
 
-        app(OtpService::class)->send($user->email, OtpService::VERIFY_EMAIL);
+        if (! app(OtpService::class)->send($user->email, OtpService::VERIFY_EMAIL)) {
+            return response()->json([
+                'message' => 'No pudimos enviar el correo. Intenta de nuevo en un momento.',
+            ], 503);
+        }
 
         return response()->json(['message' => 'Te enviamos un código a tu correo']);
     }

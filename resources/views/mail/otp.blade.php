@@ -33,9 +33,15 @@
             Este código expira en <strong>{{ $ttlMinutes }} minutos</strong> y solo puede usarse una vez.
         </p>
 
-        <p style="margin:0 0 8px;font-size:14px;line-height:20px;color:#52606d;">
-            Si no solicitaste esto, puedes ignorar este mensaje: tu contraseña no cambia.
-        </p>
+        @if ($purpose === 'reset_password')
+            <p style="margin:0 0 8px;font-size:14px;line-height:20px;color:#52606d;">
+                Si no solicitaste esto, puedes ignorar este mensaje: tu contraseña no cambia.
+            </p>
+        @else
+            <p style="margin:0 0 8px;font-size:14px;line-height:20px;color:#52606d;">
+                Si no solicitaste esto, puedes ignorar este mensaje sin más.
+            </p>
+        @endif
     </div>
 </body>
 

@@ -7,6 +7,97 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Entorno de desarrollo
+
+### Requisitos
+
+- PHP 8.3+
+- Composer
+- MySQL (este proyecto **no** usa SQLite)
+
+### Instalación
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+```
+
+### Bases de datos
+
+Se usan **dos** bases separadas:
+
+| Base | Uso |
+|------|-----|
+| `bd_spgth` | Desarrollo. La puebla `--seed` con las cuentas demo. |
+| `bd_spgth_testing` | Pruebas. `phpunit.xml` apunta aquí. Nunca se toca `bd_spgth`. |
+
+`bd_spgth_testing` **debe existir antes de correr las pruebas**. Si no existe,
+la suite falla con `unknown database` o `SQLSTATE[HY000]`. Se crea una vez:
+
+```sql
+CREATE DATABASE bd_spgth_testing CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Las pruebas usan MySQL, no SQLite, porque la extensión `pdo_sqlite` no está
+disponible en el entorno de desarrollo. Las migraciones se ejecutan solas
+sobre esa base en cada corrida.
+
+### Pruebas
+
+```bash
+php artisan test
+```
+
+### Frontend y CORS
+
+El frontend vive en otro repositorio y en desarrollo corre en
+`http://localhost:5173`. El backend permite ese origen vía CORS con
+credenciales, usando `FRONTEND_URL` (o `CORS_ALLOWED_ORIGINS` si necesitas
+varios orígenes). El frontend debe usar siempre `localhost`, nunca mezclado
+con `127.0.0.1`: las cookies distinguen host, no puerto.
+
+### Login con Google
+
+Requiere credenciales propias en `.env`:
+
+```
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
+```
+
+El `redirect_uri` debe coincidir **exactamente** con el registrado en Google
+Cloud Console.
+
+### Correo (códigos OTP)
+
+Los códigos de verificación de correo y de recuperación de contraseña se envían
+por email. En desarrollo se puede dejar `MAIL_MAILER=log`: el código se escribe
+en `storage/logs/laravel.log` y **no** llega a ningún buzón. Para envío real con
+Gmail:
+
+1. Activar la verificación en dos pasos en la cuenta de Google.
+2. Generar una **contraseña de aplicación** en
+   `myaccount.google.com/apppasswords` (16 caracteres, sin espacios).
+3. Configurar en `.env`:
+
+```
+MAIL_MAILER=smtp
+MAIL_SCHEME=null
+MAIL_HOST=smtp.gmail.com
+MAIL_PORT=587
+MAIL_USERNAME=tu-cuenta@gmail.com
+MAIL_PASSWORD=contraseña-de-aplicación-sin-espacios
+MAIL_FROM_ADDRESS="tu-cuenta@gmail.com"
+MAIL_FROM_NAME="Simulador SPGTH"
+```
+
+`MAIL_FROM_ADDRESS` debe ser el **mismo** correo autenticado, o Gmail rechaza el
+envío. `MAIL_SCHEME=null` deja que Laravel use STARTTLS en el puerto 587; **no**
+usar `tls` (Symfony solo acepta `smtp` o `smtps`).
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

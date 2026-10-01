@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\OtpMail;
 use App\Models\EmailOtp;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class OtpService
@@ -22,8 +23,13 @@ class OtpService
     /**
      * Genera un código nuevo y lo envía por correo.
      * Invalida cualquier código anterior del mismo propósito.
+     *
+     * Devuelve false si el correo no pudo enviarse (SMTP caído, credenciales
+     * mal, límite alcanzado...), pero NO lanza excepción: el código ya quedó
+     * guardado y el usuario puede reintentar. Así un fallo de correo no rompe
+     * el login ni el registro con un error 500.
      */
-    public function send(string $email, string $purpose): void
+    public function send(string $email, string $purpose): bool
     {
         $this->clear($email, $purpose);
 
@@ -37,14 +43,25 @@ class OtpService
             'expires_at' => now()->addMinutes(self::TTL_MINUTES),
         ]);
 
-        Mail::to($email)->send(new OtpMail(
-            code: $code,
-            purpose: $purpose,
-            ttlMinutes: self::TTL_MINUTES,
-            subjectLine: $purpose === self::VERIFY_EMAIL
-                ? 'Confirma tu correo - Simulador SPGTH'
-                : 'Restablece tu contraseña - Simulador SPGTH',
-        ));
+        try {
+            Mail::to($email)->send(new OtpMail(
+                code: $code,
+                purpose: $purpose,
+                ttlMinutes: self::TTL_MINUTES,
+                subjectLine: $purpose === self::VERIFY_EMAIL
+                    ? 'Confirma tu correo - Simulador SPGTH'
+                    : 'Restablece tu contraseña - Simulador SPGTH',
+            ));
+        } catch (\Throwable $e) {
+            Log::error('No se pudo enviar el código OTP por correo', [
+                'purpose' => $purpose,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     /** Comprueba el código. Si es correcto lo consume (un solo uso). */
